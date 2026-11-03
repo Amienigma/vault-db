@@ -1,0 +1,4 @@
+{
+  "rewrites": [ { "source": "/stats", "destination": "/api/stats" } ],
+  "headers": [ { "source": "/api/(.*)", "headers": [ { "key": "Cache-Control", "value": "no-store" } ] } ]
+}
