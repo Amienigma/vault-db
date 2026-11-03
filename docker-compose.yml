@@ -1,0 +1,33 @@
+x-pg: &pg
+  PGHOST: db
+  PGDATABASE: vault
+  PGUSER: vault
+  PGPASSWORD: ${DB_PASSWORD:-vaultpw}
+services:
+  db:
+    image: postgres:16
+    environment: {POSTGRES_DB: vault, POSTGRES_USER: vault, POSTGRES_PASSWORD: "${DB_PASSWORD:-vaultpw}"}
+    volumes: ["pgdata:/var/lib/postgresql/data", "./db/init.sql:/docker-entrypoint-initdb.d/init.sql"]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U vault"], interval: 3s, retries: 20}
+  api:
+    build: ./api
+    environment: {DATABASE_URL: "postgres://vault:${DB_PASSWORD:-vaultpw}@db/vault", UPLOAD_DIR: /data/uploads}
+    volumes: ["uploads:/data/uploads"]
+    depends_on: {db: {condition: service_healthy}}
+  worker:
+    build: ./worker
+    environment: {<<: *pg, JDBC_URL: "jdbc:postgresql://db:5432/vault", GUARD_URL: "http://guard:8080"}
+    volumes: ["uploads:/data/uploads"]
+    depends_on: {db: {condition: service_healthy}, guard: {condition: service_started}}
+  guard:
+    build: ./guard
+  stats:
+    build: ./stats
+    environment: *pg
+    depends_on: {db: {condition: service_healthy}}
+  web:
+    image: nginx:alpine
+    ports: ["8080:80"]
+    volumes: ["./ui/index.html:/usr/share/nginx/html/index.html:ro", "./ui/nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
+    depends_on: [api, stats]
+volumes: {pgdata: {}, uploads: {}}

@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Vault DB</title>
+<style>
+body{font:15px system-ui;margin:0;background:#0f1115;color:#e6e6e6;padding:16px;max-width:1000px;margin:auto}
+h2{margin:20px 0 8px}#drop{border:2px dashed #555;border-radius:12px;padding:28px;text-align:center;cursor:pointer}
+#drop.over{border-color:#6cf;background:#1a2430}table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{border-bottom:1px solid #2a2d35;padding:6px;text-align:left;vertical-align:top}
+.wrap{overflow-x:auto}input[type=search]{width:100%;padding:10px;border-radius:8px;border:1px solid #444;background:#181b22;color:#eee}
+.s-loaded{color:#6c6}.s-failed{color:#f66}.s-pending,.s-processing{color:#fc6}code{font-size:12px}
+</style></head><body>
+<h1>Vault DB</h1>
+<div id="drop">Drop CSV / JSON / JSONL files here or tap to choose<input id="f" type="file" multiple hidden></div>
+<h2>Files</h2><div class="wrap"><table id="files"></table></div>
+<h2>Stats (R)</h2><div class="wrap"><table id="stats"></table></div>
+<h2>Records</h2><input id="q" type="search" placeholder="Search all records..."><div class="wrap"><table id="recs"></table></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function up(list){const fd=new FormData();for(const f of list)fd.append('file',f,f.name);
+  await fetch('/api/upload',{method:'POST',body:fd});refresh();}
+$('drop').onclick=()=>$('f').click();$('f').onchange=e=>up(e.target.files);
+$('drop').ondragover=e=>{e.preventDefault();$('drop').classList.add('over')};
+$('drop').ondragleave=()=>$('drop').classList.remove('over');
+$('drop').ondrop=e=>{e.preventDefault();$('drop').classList.remove('over');up(e.dataTransfer.files)};
+async function refresh(){
+  try{
+    const fs=await (await fetch('/api/files')).json();
+    $('files').innerHTML='<tr><th>Name<th>Status<th>Rows<th>Rejected</tr>'+fs.map(f=>`<tr><td>${esc(f.name)}<td class="s-${f.status}">${f.status}${f.error?' <code>'+esc(f.error)+'</code>':''}<td>${f.rows_loaded}<td>${f.rejected}</tr>`).join('');
+    const rs=await (await fetch('/api/records?q='+encodeURIComponent($('q').value))).json();
+    const cols=[...new Set(rs.flatMap(r=>Object.keys(r.data)))].slice(0,8);
+    $('recs').innerHTML='<tr><th>#'+cols.map(c=>'<th>'+esc(c)).join('')+'</tr>'+rs.map(r=>'<tr><td>'+r.id+cols.map(c=>'<td>'+esc(r.data[c])).join('')+'</tr>').join('');
+    const st=await (await fetch('/stats')).json();
+    $('stats').innerHTML='<tr><th>Field<th>Type<th>Summary</tr>'+(st.fields||[]).map(f=>'<tr><td>'+esc(f.field)+'<td>'+f.type+'<td>'+(f.type=='numeric'?`n=${f.n} mean=${f.mean} min=${f.min} max=${f.max}`:`n=${f.n} distinct=${f.distinct} top: ${esc(JSON.stringify(f.top))}`)+'</tr>').join('')+`<tr><td colspan=3>Total records: ${st.total}</tr>`;
+  }catch(e){console.error(e)}
+}
+$('q').oninput=refresh;refresh();setInterval(refresh,3000);
+</script></body></html>

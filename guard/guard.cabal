@@ -1,0 +1,8 @@
+cabal-version: 2.4
+name: guard
+version: 0.1.0
+executable guard
+  main-is: Main.hs
+  hs-source-dirs: app
+  build-depends: base, scotty, aeson, text, vector
+  default-language: Haskell2010
